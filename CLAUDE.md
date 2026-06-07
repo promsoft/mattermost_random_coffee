@@ -10,6 +10,7 @@ Phase 1 (MVP) complete: registration/pause/profile via DM buttons + text command
 - `spec/architecture.md` — stack, components, data model, matching algorithm, meeting state machine
 - `spec/plan.md` — phased execution plan (each phase ends with a deployable bot)
 - `spec/backlog.md` — future ideas not tied to plan phases (offline/online formats, city, timezone, etc.)
+- `spec/security.md` — trust boundaries, button-callback auth scheme, secrets handling; consult before changing auth/TLS/secrets-related code
 
 ## Chosen Stack
 

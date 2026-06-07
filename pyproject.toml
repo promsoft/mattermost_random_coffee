@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "coffeebot"
 version = "0.1.0"
 description = "Random Coffee bot for Mattermost"
+license = "MIT"
 requires-python = ">=3.12"
 
 [tool.setuptools.packages.find]
