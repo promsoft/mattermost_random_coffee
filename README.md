@@ -44,11 +44,20 @@
 
 ## Запуск в Docker (рекомендуется)
 
+Образ собирается автоматически (GitHub Actions → Docker Hub:
+[`promsoft/mattermost-random-coffee`](https://hub.docker.com/r/promsoft/mattermost-random-coffee),
+теги: `latest` из main, `X.Y.Z` из git-тегов `v*`).
+
 ```bash
 cp .env.example .env   # заполнить MM_URL, MM_BOT_TOKEN, ACTIONS_SECRET, ACTIONS_BASE_URL
-docker compose up -d --build
+docker compose pull && docker compose up -d     # деплой готового образа
 docker compose logs -f coffeebot
 ```
+
+Локальная сборка вместо Docker Hub: `docker compose up -d --build`.
+
+Обновление на сервере: `docker compose pull && docker compose up -d` (миграции
+применяются при старте контейнера автоматически).
 
 База SQLite живёт в named volume `coffee-data` (`/data/coffee.db`).
 Если Mattermost слушает только localhost — см. `network_mode: host` в compose.

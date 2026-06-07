@@ -1,5 +1,9 @@
 services:
   coffeebot:
+    # Готовый образ из Docker Hub (собирается GitHub Actions из main).
+    # Деплой:           docker compose pull && docker compose up -d
+    # Локальная сборка: docker compose up -d --build
+    image: promsoft/mattermost-random-coffee:latest
     build: .
     container_name: coffeebot
     restart: unless-stopped
