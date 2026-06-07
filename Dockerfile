@@ -1,9 +1,15 @@
-FROM python:3.12-slim
+# alpine вместо slim: в базовом slim (Debian) висят CRITICAL/HIGH CVE в perl и
+# ncurses без доступных фиксов; alpine их просто не содержит. См. spec/security.md
+FROM python:3.12-alpine
+
+# apk upgrade подтягивает патчи базовых пакетов; tzdata — для zoneinfo (Europe/Moscow)
+RUN apk upgrade --no-cache && apk add --no-cache tzdata
 
 WORKDIR /app
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY pyproject.toml alembic.ini ./
 COPY alembic ./alembic

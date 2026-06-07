@@ -5,6 +5,10 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  schedule:
+    # Еженедельная пересборка: подтягивает патчи базового образа (CVE-фиксы),
+    # даже когда в коде нет изменений. Пн 04:30 UTC — до утреннего матчинга
+    - cron: "30 4 * * 1"
 
 jobs:
   test:
@@ -26,8 +30,8 @@ jobs:
 
   docker:
     needs: test
-    # Публикуем только из main и по тегам v*; для PR — лишь тесты
-    if: github.event_name == 'push'
+    # Публикуем из main, по тегам v* и еженедельным расписанием; для PR — лишь тесты
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +54,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          pull: true  # свежий базовый образ при каждой сборке
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
