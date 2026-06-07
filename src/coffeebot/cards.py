@@ -7,11 +7,11 @@ from coffeebot import texts
 from coffeebot.db.models import User, UserState
 
 
-def _button(label: str, action: str, actions_url: str) -> dict:
+def _button(label: str, action: str, actions_url: str, **context) -> dict:
     return {
-        "id": action,
+        "id": f"{action}_{context['value']}" if "value" in context else action,
         "name": label,
-        "integration": {"url": actions_url, "context": {"action": action}},
+        "integration": {"url": actions_url, "context": {"action": action, **context}},
     }
 
 
@@ -33,3 +33,45 @@ def menu_attachments(user: User | None, actions_url: str) -> list[dict]:
     if buttons:
         return [{"actions": buttons}]
     return []
+
+
+def midweek_attachments(meeting_id: int, actions_url: str) -> list[dict]:
+    """Опрос среды: договорились / созвонились / отменили / не связывались."""
+    return [
+        {
+            "actions": [
+                _button(label, "midweek", actions_url, meeting_id=meeting_id, value=value)
+                for value, label in texts.BTN_MIDWEEK.items()
+            ]
+        }
+    ]
+
+
+def survey_attachments(meeting_id: int, actions_url: str) -> list[dict]:
+    """Итог недели: состоялась / не состоялась."""
+    return [
+        {
+            "actions": [
+                _button(
+                    texts.BTN_SURVEY_YES, "survey", actions_url,
+                    meeting_id=meeting_id, value="yes",
+                ),
+                _button(
+                    texts.BTN_SURVEY_NO, "survey", actions_url,
+                    meeting_id=meeting_id, value="no",
+                ),
+            ]
+        }
+    ]
+
+
+def rating_attachments(meeting_id: int, actions_url: str) -> list[dict]:
+    """Оценка встречи 0–5."""
+    return [
+        {
+            "actions": [
+                _button(str(i), "rate", actions_url, meeting_id=meeting_id, value=i)
+                for i in range(6)
+            ]
+        }
+    ]

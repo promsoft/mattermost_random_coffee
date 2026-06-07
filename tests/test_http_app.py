@@ -7,8 +7,8 @@ class RecordingHandlers:
     def __init__(self):
         self.calls = []
 
-    def on_action(self, user_id, username, action):
-        self.calls.append((user_id, username, action))
+    def on_action(self, user_id, username, context):
+        self.calls.append((user_id, username, context))
 
 
 def make_client():
@@ -25,7 +25,14 @@ def test_valid_secret_dispatches_action():
     client, handlers = make_client()
     resp = client.post("/actions/s3cret", json=payload())
     assert resp.status_code == 200
-    assert handlers.calls == [("mm1", "ivan", "register")]
+    assert handlers.calls == [("mm1", "ivan", {"action": "register"})]
+
+
+def test_context_passed_through():
+    client, handlers = make_client()
+    ctx = {"action": "rate", "meeting_id": 7, "value": 5}
+    client.post("/actions/s3cret", json={"user_id": "mm1", "context": ctx})
+    assert handlers.calls == [("mm1", "", ctx)]
 
 
 def test_wrong_secret_403():

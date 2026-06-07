@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from coffeebot.db.models import Meeting, MeetingStatus, User, UserState
+from coffeebot.services import meetings as meetings_svc
 
 log = logging.getLogger(__name__)
 
@@ -40,16 +41,19 @@ def build_pairs(
     users: list[User],
     blocked: set[frozenset[int]],
     rng: random.Random,
+    ratings: dict[int, int] | None = None,
 ) -> tuple[list[tuple[User, User]], list[User]]:
     """Жадный подбор пар.
 
     Порядок кандидатов: случайный, затем стабильная сортировка по
-    unmatched_streak (убыв.) — кто дольше без пары, тот выбирает первым.
-    На этапе 2 сюда добавится сортировка по рейтингу (спека п. 8).
+    (unmatched_streak, рейтинг) убыв. — кто дольше без пары, тот выбирает
+    первым; при равенстве высокорейтинговые встают рядом и попадают
+    в пары друг с другом (спека п. 8).
     """
+    ratings = ratings or {}
     queue = users[:]
     rng.shuffle(queue)
-    queue.sort(key=lambda u: u.unmatched_streak, reverse=True)
+    queue.sort(key=lambda u: (u.unmatched_streak, ratings.get(u.id, 0)), reverse=True)
 
     pairs: list[tuple[User, User]] = []
     unmatched: list[User] = []
@@ -87,7 +91,8 @@ def run_weekly_matching(
         session.scalars(select(User).where(User.state == UserState.ACTIVE)).all()
     )
     blocked = recent_pairs(session, week_start - timedelta(days=PAIR_COOLDOWN_DAYS))
-    pairs, unmatched = build_pairs(users, blocked, rng or random.Random())
+    user_ratings = meetings_svc.ratings(session)
+    pairs, unmatched = build_pairs(users, blocked, rng or random.Random(), user_ratings)
 
     result = MatchResult(week_start=week_start, unmatched=unmatched)
     for u1, u2 in pairs:

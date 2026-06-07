@@ -15,6 +15,7 @@ from coffeebot.db.models import User, UserState
 from coffeebot.events import IncomingDM
 from coffeebot.mm import MattermostGateway
 from coffeebot.services import matching, users
+from coffeebot.services import meetings as meetings_svc
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +63,8 @@ class BotHandlers:
 
     # --- нажатия кнопок ----------------------------------------------------
 
-    def on_action(self, mm_user_id: str, username: str, action: str) -> None:
+    def on_action(self, mm_user_id: str, username: str, context: dict) -> None:
+        action = context.get("action")
         with self.session_factory() as session:
             user = users.get_by_mm_id(session, mm_user_id)
             if action == "register":
@@ -75,8 +77,41 @@ class BotHandlers:
                 if user is not None:
                     users.start_profile_edit(session, user)
                     self.gateway.dm(mm_user_id, texts.PROFILE_EDIT_PROMPT)
+            elif action in ("midweek", "survey", "rate"):
+                self._on_meeting_action(session, user, mm_user_id, action, context)
             else:
                 log.warning("Неизвестное действие кнопки: %s от %s", action, mm_user_id)
+
+    def _on_meeting_action(
+        self, session: Session, user: User | None, mm_user_id: str, action: str, context: dict
+    ) -> None:
+        meeting = meetings_svc.get(session, int(context.get("meeting_id", 0)))
+        if user is None or meeting is None:
+            log.warning("Действие %s: нет пользователя/встречи (%s)", action, context)
+            return
+        if meetings_svc.user_slot(meeting, user) is None:
+            self.gateway.dm(mm_user_id, texts.NOT_YOUR_MEETING)
+            return
+        value = context.get("value")
+        if action == "midweek":
+            if meetings_svc.set_midweek_status(session, meeting, user, str(value)):
+                self.gateway.dm(mm_user_id, texts.MIDWEEK_THANKS[str(value)])
+        elif action == "survey":
+            happened = value == "yes"
+            meetings_svc.set_survey_answer(session, meeting, user, happened)
+            if happened:
+                self.gateway.dm(
+                    mm_user_id,
+                    texts.SURVEY_YES,
+                    cards.rating_attachments(meeting.id, self.settings.actions_url),
+                )
+            else:
+                self.gateway.dm(mm_user_id, texts.SURVEY_NO)
+        elif action == "rate":
+            if meetings_svc.set_rating(session, meeting, user, int(value)):
+                self.gateway.dm(mm_user_id, texts.RATING_THANKS.format(value=value))
+            else:
+                self.gateway.dm(mm_user_id, texts.MEETING_NOT_RATEABLE)
 
     # --- сценарии ----------------------------------------------------------
 
@@ -135,10 +170,51 @@ class BotHandlers:
         today = datetime.now(self.tz).date()
         week_start = matching.current_week_start(today)
         with self.session_factory() as session:
+            meetings_svc.close_stale(session, week_start)  # прошлая неделя без итога
             result = matching.run_weekly_matching(session, week_start)
             self._notify_pairs(session, week_start)
             if result is not None:
                 self._announce(result)
+
+    def run_midweek_job(self) -> None:
+        """Среда: напоминание + опрос статуса каждому участнику пары. Идемпотентно."""
+        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        with self.session_factory() as session:
+            for meeting in meetings_svc.for_midweek_poll(session, week_start):
+                attachments = cards.midweek_attachments(meeting.id, self.settings.actions_url)
+                try:
+                    for user in (meeting.user1, meeting.user2):
+                        partner = meetings_svc.partner_of(meeting, user)
+                        self.gateway.dm(
+                            user.mm_user_id,
+                            texts.MIDWEEK_POLL.format(partner=f"@{partner.username}"),
+                            attachments,
+                        )
+                except Exception:
+                    log.exception("Опрос среды: не удалось отправить по %s", meeting)
+                    continue
+                meeting.midweek_sent_at = datetime.now(UTC).replace(tzinfo=None)
+                session.commit()
+
+    def run_survey_job(self) -> None:
+        """Воскресенье: итоговый опрос (состоялась? + оценка). Идемпотентно."""
+        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        with self.session_factory() as session:
+            for meeting in meetings_svc.for_survey(session, week_start):
+                attachments = cards.survey_attachments(meeting.id, self.settings.actions_url)
+                try:
+                    for user in (meeting.user1, meeting.user2):
+                        partner = meetings_svc.partner_of(meeting, user)
+                        self.gateway.dm(
+                            user.mm_user_id,
+                            texts.SURVEY.format(partner=f"@{partner.username}"),
+                            attachments,
+                        )
+                except Exception:
+                    log.exception("Итоговый опрос: не удалось отправить по %s", meeting)
+                    continue
+                meeting.survey_sent_at = datetime.now(UTC).replace(tzinfo=None)
+                session.commit()
 
     def notify_pending(self) -> None:
         """Дослать уведомления, не отправленные из-за рестарта (без анонса)."""

@@ -25,13 +25,13 @@ def create_app(handlers: BotHandlers, actions_secret: str) -> FastAPI:
         payload = await request.json()
         user_id = payload.get("user_id")
         username = payload.get("user_name") or ""
-        action = (payload.get("context") or {}).get("action")
-        if not user_id or not action:
+        context = payload.get("context") or {}
+        if not user_id or not context.get("action"):
             raise HTTPException(status_code=400)
         try:
-            handlers.on_action(user_id, username, action)
+            handlers.on_action(user_id, username, context)
         except Exception:
-            log.exception("Ошибка обработки действия %s от %s", action, user_id)
+            log.exception("Ошибка обработки действия %s от %s", context, user_id)
             return {"ephemeral_text": "Что-то пошло не так, попробуйте ещё раз."}
         # Ответы бот шлёт отдельными сообщениями; сам пост с кнопками не трогаем
         return {}

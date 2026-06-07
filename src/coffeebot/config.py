@@ -30,10 +30,16 @@ class Settings(BaseSettings):
     # callback-запросы, секрет + внутренняя сеть = аутентификация запросов
     actions_secret: str = ""
 
-    # Расписание матчинга: день недели (0 = понедельник) и время в поясе tz
-    match_weekday: int = 0
+    # Расписания (день недели: 0 = понедельник; время в поясе tz)
+    match_weekday: int = 0  # матчинг пар
     match_hour: int = 7
     match_minute: int = 0
+    midweek_weekday: int = 2  # опрос статуса (среда)
+    midweek_hour: int = 14
+    midweek_minute: int = 0
+    survey_weekday: int = 6  # итоги и оценка (воскресенье)
+    survey_hour: int = 14
+    survey_minute: int = 0
 
     @property
     def db_url(self) -> str:

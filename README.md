@@ -1,14 +1,19 @@
 # Random Coffee Bot для Mattermost
 
+[![CI & Docker](https://github.com/promsoft/mattermost_random_coffee/actions/workflows/ci.yml/badge.svg)](https://github.com/promsoft/mattermost_random_coffee/actions/workflows/ci.yml)
+[![Docker Hub](https://img.shields.io/docker/v/promsoft/mattermost-random-coffee?label=docker&sort=semver)](https://hub.docker.com/r/promsoft/mattermost-random-coffee)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Бот еженедельных random coffee: собирает случайные пары участников по понедельникам,
 напоминает о встрече, собирает оценки и ведёт рейтинг.
 
 Документация: [спецификация](spec/random-coffee-bot.md) · [архитектура](spec/architecture.md) ·
 [план](spec/plan.md) · [бэклог](spec/backlog.md) · [безопасность](spec/security.md)
 
-**Статус: этап 1 (MVP)** — регистрация/пауза/профиль (кнопки + команды в личке),
-еженедельный матчинг пар с годовым кулдауном, знакомство пары в групповом чате,
-анонсы в канал, справка.
+**Статус: этап 2** — полный недельный цикл: регистрация/пауза/профиль,
+понедельничный матчинг (рейтинг + годовой кулдаун пар), знакомство пары
+в групповом чате, опрос статуса в среду, итоги и оценка 0–5 в воскресенье,
+рейтинг участников, анонсы в канал.
 
 ## Как пользоваться (участнику)
 

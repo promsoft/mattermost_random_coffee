@@ -73,8 +73,10 @@ class Meeting(Base):
     rating_u2: Mapped[int | None] = mapped_column(default=None)
     postponed_from_id: Mapped[int | None] = mapped_column(ForeignKey("meetings.id"), default=None)
     cancelled_by: Mapped[str | None] = mapped_column(String(16), default=None)  # user | admin
-    # Когда паре отправлено уведомление (идемпотентность рассылки)
-    notified_at: Mapped[datetime | None] = mapped_column(default=None)
+    # Отметки отправки рассылок (идемпотентность: рестарт не дублирует)
+    notified_at: Mapped[datetime | None] = mapped_column(default=None)  # карточка пары
+    midweek_sent_at: Mapped[datetime | None] = mapped_column(default=None)  # опрос среды
+    survey_sent_at: Mapped[datetime | None] = mapped_column(default=None)  # итоговый опрос
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 

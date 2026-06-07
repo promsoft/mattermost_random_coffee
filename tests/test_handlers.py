@@ -77,11 +77,11 @@ def test_profile_inline_set(handlers, gateway, session_factory):
 
 
 def test_button_actions(handlers, gateway, session_factory):
-    handlers.on_action("mm1", "ivan", "register")
+    handlers.on_action("mm1", "ivan", {"action": "register"})
     assert get_user(session_factory).state == UserState.ACTIVE
-    handlers.on_action("mm1", "ivan", "pause")
+    handlers.on_action("mm1", "ivan", {"action": "pause"})
     assert get_user(session_factory).state == UserState.PAUSED
-    handlers.on_action("mm1", "ivan", "resume")
+    handlers.on_action("mm1", "ivan", {"action": "resume"})
     assert get_user(session_factory).state == UserState.ACTIVE
 
 
