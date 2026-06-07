@@ -14,6 +14,7 @@ from coffeebot.config import Settings
 from coffeebot.db.models import User, UserState
 from coffeebot.events import IncomingDM
 from coffeebot.mm import MattermostGateway
+from coffeebot.services import complaints as complaints_svc
 from coffeebot.services import matching, users
 from coffeebot.services import meetings as meetings_svc
 
@@ -24,6 +25,8 @@ PAUSE_WORDS = {"пауза", "pause", "стоп", "stop"}
 RESUME_WORDS = {"возобновить", "resume"}
 PROFILE_WORDS = {"профиль", "profile"}
 HELP_WORDS = {"помощь", "help", "справка", "меню"}
+COMPLAIN_WORDS = {"пожаловаться", "жалоба", "complain"}
+ADMIN_WORDS = {"админ", "admin"}
 
 
 class BotHandlers:
@@ -45,8 +48,12 @@ class BotHandlers:
             user = users.get_by_mm_id(session, dm.user_id)
             word = dm.text.split(maxsplit=1)[0].lower()
 
-            if word in HELP_WORDS:
+            if word in ADMIN_WORDS:
+                self._on_admin(session, dm)
+            elif word in HELP_WORDS:
                 self._send_menu(dm.user_id, user, texts.HELP)
+            elif word in COMPLAIN_WORDS:
+                self._do_complain(session, user, dm)
             elif word in REGISTER_WORDS:
                 self._do_register(session, dm.user_id, dm.username or None)
             elif word in PAUSE_WORDS:
@@ -77,7 +84,7 @@ class BotHandlers:
                 if user is not None:
                     users.start_profile_edit(session, user)
                     self.gateway.dm(mm_user_id, texts.PROFILE_EDIT_PROMPT)
-            elif action in ("midweek", "survey", "rate"):
+            elif action in ("midweek", "survey", "rate", "complain"):
                 self._on_meeting_action(session, user, mm_user_id, action, context)
             else:
                 log.warning("Неизвестное действие кнопки: %s от %s", action, mm_user_id)
@@ -112,6 +119,52 @@ class BotHandlers:
                 self.gateway.dm(mm_user_id, texts.RATING_THANKS.format(value=value))
             else:
                 self.gateway.dm(mm_user_id, texts.MEETING_NOT_RATEABLE)
+        elif action == "complain":
+            self._confirm_complain(session, meeting, user, mm_user_id)
+
+    # --- жалобы --------------------------------------------------------------
+
+    def _do_complain(self, session: Session, user: User | None, dm: IncomingDM) -> None:
+        if user is None:
+            self._send_menu(dm.user_id, None, texts.NOT_REGISTERED_HINT)
+            return
+        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        meeting = meetings_svc.user_meeting_of_week(session, user, week_start)
+        if meeting is None:
+            self.gateway.dm(dm.user_id, texts.COMPLAIN_NO_MEETING)
+            return
+        accused = meetings_svc.partner_of(meeting, user)
+        self.gateway.dm(
+            dm.user_id,
+            texts.COMPLAIN_CONFIRM.format(accused=f"@{accused.username}"),
+            cards.complain_confirm_attachments(meeting.id, self.settings.actions_url),
+        )
+
+    def _confirm_complain(
+        self, session: Session, meeting, reporter: User, mm_user_id: str
+    ) -> None:
+        accused = meetings_svc.partner_of(meeting, reporter)
+        mention = f"@{accused.username}"
+        if accused.state == UserState.PAUSED_BY_COMPLAINT:
+            self.gateway.dm(mm_user_id, texts.COMPLAIN_ALREADY.format(accused=mention))
+            return
+        complaint = complaints_svc.create(session, meeting, reporter, accused)
+        self.gateway.dm(mm_user_id, texts.COMPLAIN_DONE.format(accused=mention))
+        self._notify_admins(
+            texts.COMPLAIN_ADMIN_ALERT.format(
+                complaint_id=complaint.id,
+                reporter=reporter.username,
+                accused=accused.username,
+                meeting_id=meeting.id,
+            )
+        )
+
+    def _notify_admins(self, message: str) -> None:
+        for admin_name in sorted(self.settings.admin_username_set):
+            try:
+                self.gateway.dm(self.gateway.user_id_by_username(admin_name), message)
+            except Exception:
+                log.exception("Не удалось уведомить админа @%s", admin_name)
 
     # --- сценарии ----------------------------------------------------------
 
@@ -162,6 +215,151 @@ class BotHandlers:
         else:
             users.start_profile_edit(session, user)
             self.gateway.dm(dm.user_id, texts.PROFILE_EMPTY + " " + texts.PROFILE_EDIT_PROMPT)
+
+    # --- админка -------------------------------------------------------------
+
+    def _on_admin(self, session: Session, dm: IncomingDM) -> None:
+        username = dm.username or self.gateway.username(dm.user_id)
+        if username not in self.settings.admin_username_set:
+            self.gateway.dm(dm.user_id, texts.ADMIN_ONLY)
+            return
+        parts = dm.text.split()
+        sub = parts[1].lower() if len(parts) > 1 else "помощь"
+        arg = parts[2] if len(parts) > 2 else None
+        if sub in ("участники", "users"):
+            self.gateway.dm(dm.user_id, self._report_users(session))
+        elif sub in ("встречи", "meetings"):
+            self.gateway.dm(dm.user_id, self._report_meetings(session))
+        elif sub in ("жалобы", "complaints"):
+            self.gateway.dm(dm.user_id, self._report_complaints(session))
+        elif sub in ("отменить", "cancel") and arg:
+            self._admin_cancel(session, dm.user_id, arg)
+        elif sub in ("пауза", "pause") and arg:
+            self._admin_pause(session, dm.user_id, arg)
+        elif sub in ("снять-паузу", "unpause", "разблокировать") and arg:
+            self._admin_unpause(session, dm.user_id, arg)
+        else:
+            self.gateway.dm(dm.user_id, texts.ADMIN_HELP)
+
+    def _report_users(self, session: Session) -> str:
+        all_users = users.all_users(session)
+        if not all_users:
+            return texts.ADMIN_NO_USERS
+        ratings = meetings_svc.ratings(session)
+        lines = [texts.ADMIN_USERS_HEADER.format(n=len(all_users))]
+        for u in all_users:
+            lines.append(
+                texts.ADMIN_USER_LINE.format(
+                    username=u.username,
+                    state=texts.STATE_LABELS.get(u.state.value, u.state.value),
+                    rating=ratings.get(u.id, 0),
+                    streak=u.unmatched_streak,
+                    profile="" if u.profile else " (без профиля)",
+                )
+            )
+        return "\n".join(lines)
+
+    def _report_meetings(self, session: Session) -> str:
+        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        meetings = meetings_svc.week_meetings(session, week_start)
+        if not meetings:
+            return texts.ADMIN_NO_MEETINGS
+        lines = [texts.ADMIN_MEETINGS_HEADER.format(week=week_start, n=len(meetings))]
+        for m in meetings:
+            midweek = ""
+            if m.midweek_status_u1 or m.midweek_status_u2:
+                midweek = f", ср: {m.midweek_status_u1 or '—'}/{m.midweek_status_u2 or '—'}"
+            ratings = ""
+            if m.rating_u1 is not None or m.rating_u2 is not None:
+                r1 = m.rating_u1 if m.rating_u1 is not None else "—"
+                r2 = m.rating_u2 if m.rating_u2 is not None else "—"
+                ratings = f", оценки: {r1}/{r2}"
+            lines.append(
+                texts.ADMIN_MEETING_LINE.format(
+                    id=m.id,
+                    u1=m.user1.username,
+                    u2=m.user2.username,
+                    status=m.status.value,
+                    midweek=midweek,
+                    ratings=ratings,
+                )
+            )
+        return "\n".join(lines)
+
+    def _report_complaints(self, session: Session) -> str:
+        complaints = complaints_svc.open_list(session)
+        if not complaints:
+            return texts.ADMIN_NO_COMPLAINTS
+        lines = [texts.ADMIN_COMPLAINTS_HEADER.format(n=len(complaints))]
+        for c in complaints:
+            lines.append(
+                texts.ADMIN_COMPLAINT_LINE.format(
+                    id=c.id,
+                    reporter=c.reporter.username,
+                    accused=c.accused.username,
+                    meeting_id=c.meeting_id,
+                    created=c.created_at.date(),
+                )
+            )
+        return "\n".join(lines)
+
+    def _admin_cancel(self, session: Session, admin_id: str, arg: str) -> None:
+        meeting = meetings_svc.get(session, int(arg)) if arg.isdigit() else None
+        if meeting is None:
+            self.gateway.dm(admin_id, texts.ADMIN_CANCEL_NOT_FOUND.format(id=arg))
+            return
+        if not meetings_svc.admin_cancel(session, meeting):
+            self.gateway.dm(
+                admin_id,
+                texts.ADMIN_CANCEL_FINAL.format(id=meeting.id, status=meeting.status.value),
+            )
+            return
+        for user in (meeting.user1, meeting.user2):
+            partner = meetings_svc.partner_of(meeting, user)
+            try:
+                self.gateway.dm(
+                    user.mm_user_id,
+                    texts.MEETING_CANCELLED_BY_ADMIN.format(partner=partner.username),
+                )
+            except Exception:
+                log.exception("Не удалось уведомить @%s об отмене", user.username)
+        self.gateway.dm(
+            admin_id,
+            texts.ADMIN_CANCELLED.format(
+                id=meeting.id, u1=meeting.user1.username, u2=meeting.user2.username
+            ),
+        )
+
+    def _admin_pause(self, session: Session, admin_id: str, arg: str) -> None:
+        user = users.get_by_username(session, arg)
+        if user is None:
+            self.gateway.dm(admin_id, texts.ADMIN_USER_NOT_FOUND.format(username=arg))
+            return
+        users.admin_pause(session, user)
+        self.gateway.dm(admin_id, texts.ADMIN_PAUSED.format(username=user.username))
+        try:
+            self.gateway.dm(user.mm_user_id, texts.USER_PAUSED_BY_ADMIN_DM)
+        except Exception:
+            log.exception("Не удалось уведомить @%s о паузе", user.username)
+
+    def _admin_unpause(self, session: Session, admin_id: str, arg: str) -> None:
+        user = users.get_by_username(session, arg)
+        if user is None:
+            self.gateway.dm(admin_id, texts.ADMIN_USER_NOT_FOUND.format(username=arg))
+            return
+        resolved = complaints_svc.resolve_for(session, user)
+        users.admin_unpause(session, user)
+        complaints_note = (
+            texts.ADMIN_UNPAUSED_COMPLAINTS.format(n=resolved) if resolved else ""
+        )
+        self.gateway.dm(
+            admin_id,
+            texts.ADMIN_UNPAUSED.format(username=user.username, complaints=complaints_note),
+        )
+        try:
+            self.gateway.dm(user.mm_user_id, texts.USER_UNPAUSED_DM)
+        except Exception:
+            log.exception("Не удалось уведомить @%s о снятии паузы", user.username)
 
     # --- еженедельный матчинг ----------------------------------------------
 

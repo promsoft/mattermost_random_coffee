@@ -42,6 +42,25 @@ def resume(session: Session, user: User) -> bool:
     return True
 
 
+def get_by_username(session: Session, username: str) -> User | None:
+    return session.scalar(select(User).where(User.username == username.lstrip("@")))
+
+
+def admin_pause(session: Session, user: User) -> None:
+    user.state = UserState.PAUSED_BY_ADMIN
+    session.commit()
+
+
+def admin_unpause(session: Session, user: User) -> None:
+    """Снять любую паузу (в т.ч. по жалобе)."""
+    user.state = UserState.ACTIVE
+    session.commit()
+
+
+def all_users(session: Session) -> list[User]:
+    return list(session.scalars(select(User).order_by(User.username)))
+
+
 def set_profile(session: Session, user: User, text: str) -> None:
     user.profile = text.strip()
     user.awaiting_profile = False

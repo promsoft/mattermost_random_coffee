@@ -101,6 +101,36 @@ def set_rating(session: Session, meeting: Meeting, user: User, value: int) -> bo
     return True
 
 
+def admin_cancel(session: Session, meeting: Meeting) -> bool:
+    """Отмена встречи администратором. False — встреча уже в конечном статусе."""
+    if meeting.status not in (MeetingStatus.SCHEDULED, MeetingStatus.POSTPONE_PENDING):
+        return False
+    meeting.status = MeetingStatus.CANCELLED
+    meeting.cancelled_by = "admin"
+    session.commit()
+    return True
+
+
+def week_meetings(session: Session, week_start: date) -> list[Meeting]:
+    return list(
+        session.scalars(
+            select(Meeting).where(Meeting.week_start == week_start).order_by(Meeting.id)
+        )
+    )
+
+
+def user_meeting_of_week(session: Session, user: User, week_start: date) -> Meeting | None:
+    """Встреча участника на этой неделе (для жалобы)."""
+    return session.scalar(
+        select(Meeting)
+        .where(
+            Meeting.week_start == week_start,
+            (Meeting.user1_id == user.id) | (Meeting.user2_id == user.id),
+        )
+        .order_by(Meeting.id.desc())
+    )
+
+
 def close_stale(session: Session, before_week: date) -> int:
     """Встречи прошлых недель без итога → no_response. Возвращает число закрытых."""
     stale = list(

@@ -85,3 +85,28 @@ class Meeting(Base):
 
     def __repr__(self) -> str:
         return f"<Meeting {self.week_start} #{self.user1_id}+#{self.user2_id} {self.status}>"
+
+
+class ComplaintStatus(enum.StrEnum):
+    OPEN = "open"
+    RESOLVED = "resolved"
+
+
+class Complaint(Base):
+    __tablename__ = "complaints"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    meeting_id: Mapped[int] = mapped_column(ForeignKey("meetings.id"), index=True)
+    reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    accused_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    status: Mapped[ComplaintStatus] = mapped_column(
+        _enum(ComplaintStatus), default=ComplaintStatus.OPEN
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(default=None)
+
+    reporter: Mapped[User] = relationship(foreign_keys=[reporter_id])
+    accused: Mapped[User] = relationship(foreign_keys=[accused_id])
+
+    def __repr__(self) -> str:
+        return f"<Complaint #{self.id} on user {self.accused_id} ({self.status})>"

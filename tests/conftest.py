@@ -41,6 +41,9 @@ class FakeGateway:
     def username(self, mm_user_id):
         return f"user_{mm_user_id}"
 
+    def user_id_by_username(self, username):
+        return f"id-{username.lstrip('@')}"
+
 
 @pytest.fixture
 def gateway():

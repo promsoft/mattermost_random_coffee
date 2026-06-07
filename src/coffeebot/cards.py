@@ -75,3 +75,16 @@ def rating_attachments(meeting_id: int, actions_url: str) -> list[dict]:
             ]
         }
     ]
+
+
+def complain_confirm_attachments(meeting_id: int, actions_url: str) -> list[dict]:
+    """Подтверждение жалобы (обвиняемый определяется на сервере как партнёр)."""
+    return [
+        {
+            "actions": [
+                _button(
+                    texts.BTN_COMPLAIN_YES, "complain", actions_url, meeting_id=meeting_id
+                )
+            ]
+        }
+    ]

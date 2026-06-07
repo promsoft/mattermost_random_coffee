@@ -44,3 +44,6 @@ class MattermostGateway:
 
     def username(self, mm_user_id: str) -> str:
         return self.driver.users.get_user(mm_user_id)["username"]
+
+    def user_id_by_username(self, username: str) -> str:
+        return self.driver.users.get_user_by_username(username.lstrip("@"))["id"]
