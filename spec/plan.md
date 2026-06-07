@@ -3,13 +3,13 @@
 Принцип: каждый этап заканчивается работающим ботом, который можно выкатить.
 Спека: [random-coffee-bot.md](random-coffee-bot.md), архитектура: [architecture.md](architecture.md).
 
-## Этап 0 — каркас проекта
+## Этап 0 — каркас проекта ✅
 
-- [ ] Структура проекта (`src/coffeebot/`), pyproject.toml, ruff, pytest
-- [ ] Конфиг (pydantic-settings), подключение к Mattermost (mattermostdriver), эхо-бот в DM
-- [ ] SQLite + SQLAlchemy + Alembic, модель `users`
-- [ ] Dockerfile + docker-compose.yml (volume для БД), README по запуску
-- [ ] Создание bot-аккаунта в Mattermost, токен, инструкция
+- [x] Структура проекта (`src/coffeebot/`), pyproject.toml, ruff, pytest
+- [x] Конфиг (pydantic-settings), подключение к Mattermost (mattermostdriver), эхо-бот в DM
+- [x] SQLite + SQLAlchemy + Alembic, модель `users`
+- [x] Dockerfile + docker-compose.yml (volume для БД), README по запуску
+- [x] Инструкция по созданию bot-аккаунта — в README (само создание — на админе Mattermost)
 
 ## Этап 1 — MVP: регистрация и пары (спека п. 1, 2, 3, 6, 13)
 

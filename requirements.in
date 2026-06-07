@@ -1,0 +1,9 @@
+# Runtime
+mattermostdriver
+pydantic-settings
+SQLAlchemy
+alembic
+
+# Dev
+pytest
+ruff

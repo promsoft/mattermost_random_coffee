@@ -1,0 +1,17 @@
+services:
+  coffeebot:
+    build: .
+    container_name: coffeebot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_PATH: /data/coffee.db
+      TZ: Europe/Moscow
+    volumes:
+      - coffee-data:/data
+    # Если Mattermost доступен только на localhost хоста (не по публичному URL),
+    # раскомментируйте host-режим сети и используйте MM_URL=http://localhost:8065
+    # network_mode: host
+
+volumes:
+  coffee-data:

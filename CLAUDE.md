@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-Greenfield project — spec and architecture are finalized, no code yet. Documents (in Russian):
+Phase 0 complete: project skeleton, config, SQLite + Alembic, echo bot in DMs, Docker. Next phases (see `spec/plan.md`): MVP registration + weekly pairing → status/rating cycle → decline/postpone → admin/complaints. Documents (in Russian):
 
 - `spec/random-coffee-bot.md` — product spec + clarified decisions
 - `spec/architecture.md` — stack, components, data model, matching algorithm, meeting state machine
@@ -18,7 +18,25 @@ Python 3.12+ standalone bot (not a plugin): `mattermostdriver` (REST + WebSocket
 ## Development Environment
 
 - Python env: pyenv virtualenv `projects_mattermost_random_coffee` (Python 3.12), auto-activated via `.python-version` — do not create another venv.
-- Dependencies: declare top-level deps in `requirements.in`, compile with `uv pip compile requirements.in -o requirements.txt`, install with `uv pip sync requirements.txt` (`uv` is already installed in the venv).
+- Dependencies: declare top-level deps in `requirements.in`, compile with `uv pip compile requirements.in -o requirements.txt`, install with `uv pip install -r requirements.txt` (NOT `uv pip sync` — it would uninstall `uv`/`pip` themselves from the venv).
+- The package is installed editable (`uv pip install -e .`), src-layout: code in `src/coffeebot/`.
+
+## Commands
+
+```bash
+python -m pytest -q                  # tests (single test: python -m pytest tests/test_events.py::test_echo_on_direct_message)
+ruff check .                         # lint (alembic/versions excluded)
+alembic upgrade head                 # apply DB migrations (DB_PATH env or .env controls target)
+alembic revision --autogenerate -m "..."   # new migration after model changes
+python -m coffeebot.main             # run the bot (needs MM_URL, MM_BOT_TOKEN in .env)
+docker compose up -d --build         # production-style run
+```
+
+## Architecture Notes
+
+- `coffeebot.events.handle_event` is a pure function (raw WebSocket JSON → `Reply | None`); all network I/O stays in `main.py`. Keep domain logic free of network calls for testability.
+- DB sessions via `coffeebot.db.session.make_engine`/`make_session_factory`; models in `coffeebot.db.models` (state stored as non-native StrEnum → VARCHAR).
+- Alembic `env.py` reads the DB URL from `Settings` (`.env`/`DB_PATH`), `render_as_batch=True` for SQLite ALTERs.
 
 ## What This Project Is
 
