@@ -63,8 +63,15 @@ class BotHandlers:
             elif word in PROFILE_WORDS:
                 self._do_profile(session, user, dm)
             elif user is not None and user.awaiting_profile:
-                users.set_profile(session, user, dm.text)
-                self.gateway.dm(dm.user_id, texts.PROFILE_SAVED.format(profile=user.profile))
+                if users.set_profile(session, user, dm.text):
+                    self.gateway.dm(
+                        dm.user_id, texts.PROFILE_SAVED.format(profile=user.profile)
+                    )
+                else:
+                    self.gateway.dm(
+                        dm.user_id,
+                        texts.PROFILE_TOO_LONG.format(max_len=users.PROFILE_MAX_LEN),
+                    )
             else:
                 self._send_menu(dm.user_id, user, texts.UNKNOWN_COMMAND + "\n\n" + texts.HELP)
 
@@ -205,8 +212,12 @@ class BotHandlers:
             return
         parts = dm.text.split(maxsplit=1)
         if len(parts) > 1:  # «профиль <текст>» — сохранить сразу
-            users.set_profile(session, user, parts[1])
-            self.gateway.dm(dm.user_id, texts.PROFILE_SAVED.format(profile=user.profile))
+            if users.set_profile(session, user, parts[1]):
+                self.gateway.dm(dm.user_id, texts.PROFILE_SAVED.format(profile=user.profile))
+            else:
+                self.gateway.dm(
+                    dm.user_id, texts.PROFILE_TOO_LONG.format(max_len=users.PROFILE_MAX_LEN)
+                )
         elif user.profile:
             attachments = cards.menu_attachments(user, self.settings.actions_url)
             self.gateway.dm(
@@ -426,13 +437,17 @@ class BotHandlers:
             u1, u2 = meeting.user1, meeting.user2
             try:
                 channel_id = self.gateway.group_channel([u1.mm_user_id, u2.mm_user_id])
+                # sanitize и при отправке — защищает и профили, сохранённые
+                # до введения санитизации
                 self.gateway.post(
                     channel_id,
                     texts.PAIR_CARD.format(
                         mention1=f"@{u1.username}",
                         mention2=f"@{u2.username}",
-                        profile1=u1.profile or texts.PROFILE_NOT_FILLED,
-                        profile2=u2.profile or texts.PROFILE_NOT_FILLED,
+                        profile1=users.sanitize_profile(u1.profile or "")
+                        or texts.PROFILE_NOT_FILLED,
+                        profile2=users.sanitize_profile(u2.profile or "")
+                        or texts.PROFILE_NOT_FILLED,
                     ),
                 )
             except Exception:
