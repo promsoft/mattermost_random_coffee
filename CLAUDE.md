@@ -9,10 +9,16 @@ Greenfield project — spec and architecture are finalized, no code yet. Documen
 - `spec/random-coffee-bot.md` — product spec + clarified decisions
 - `spec/architecture.md` — stack, components, data model, matching algorithm, meeting state machine
 - `spec/plan.md` — phased execution plan (each phase ends with a deployable bot)
+- `spec/backlog.md` — future ideas not tied to plan phases (offline/online formats, city, timezone, etc.)
 
 ## Chosen Stack
 
-Python 3.12+ standalone bot (not a plugin): `mattermostdriver` (REST + WebSocket), FastAPI endpoint for interactive button callbacks, APScheduler (cron jobs Mon/Wed/Sun, Europe/Moscow), SQLite + SQLAlchemy + Alembic, pydantic-settings, Docker Compose deployment on the same host as Mattermost. Tests: pytest; lint: ruff. Scale target: ≤50 participants.
+Python 3.12+ standalone bot (not a plugin): `mattermostdriver` (REST + WebSocket), FastAPI endpoint for interactive button callbacks, APScheduler (cron jobs Mon/Wed/Sun, Europe/Moscow), SQLite + SQLAlchemy + Alembic, pydantic-settings, Docker Compose deployment on the same host as Mattermost. Tests: pytest; lint: ruff. Scale: community of 4000+, but expect tens of active participants at start; design for growth to hundreds.
+
+## Development Environment
+
+- Python env: pyenv virtualenv `projects_mattermost_random_coffee` (Python 3.12), auto-activated via `.python-version` — do not create another venv.
+- Dependencies: declare top-level deps in `requirements.in`, compile with `uv pip compile requirements.in -o requirements.txt`, install with `uv pip sync requirements.txt` (`uv` is already installed in the venv).
 
 ## What This Project Is
 
