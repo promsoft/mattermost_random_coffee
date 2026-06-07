@@ -1,0 +1,32 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Status
+
+Greenfield project — no code, build system, or tech stack chosen yet. The only artifact is the product spec in `spec/random-coffee-bot.md` (written in Russian).
+
+## What This Project Is
+
+A "Random Coffee" bot for a self-hosted **Mattermost server (Free Edition, version 11)** that organizes weekly random 1:1 video calls between community members.
+
+Key requirements from the spec:
+
+- **Participation**: users register, opt out, or pause via the bot; each user has a short profile with contact info (Telegram, WhatsApp, etc.)
+- **Weekly cycle**: random pairs are formed every Monday and notified; mid-week the bot asks for status (agreed / called / cancelled / not yet in touch); end of week it asks for a 0–5 rating (0 = terrible)
+- **Matching rules**:
+  - Pairing prioritizes high-rating users together (rating = sum of ratings across completed meetings)
+  - A pair cannot repeat within one year, regardless of whether the call happened
+  - A user can decline a match and try another pair from the unmatched pool
+  - A pair can propose postponing to next week; the partner either accepts or cancels (cancelled = meeting did not happen)
+- **History**: all meetings are stored
+- **Admin**: can cancel any meeting, view scheduled meetings / participants / ratings, and force-pause any user (no editing of meetings needed)
+- **Complaints**: a participant can report their meeting partner, which pauses the reported user until an admin unblocks them
+- **Help**: the bot provides concise but informative usage/how-it-works help
+
+The spec ends with an open request: clarify details with the user, research random coffee bot best practices from other communities, and start with a minimum viable feature set.
+
+## Conventions
+
+- The spec and user communication are in Russian; keep user-facing bot texts in Russian unless decided otherwise.
+- Target platform constraint: Mattermost **Free Edition** — features requiring paid licenses are unavailable.
