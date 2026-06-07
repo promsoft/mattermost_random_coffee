@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Virtualenv (symlink to pyenv env)
+venv
+
+# Secrets and local config
+.env
+
+# Local data
+*.db
+*.sqlite3
