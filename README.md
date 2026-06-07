@@ -33,14 +33,32 @@
    → `ACTIONS_SECRET` (обязателен: Mattermost Free не подписывает callback-запросы,
    секрет в URL + внутренняя сеть — единственная аутентификация).
 2. `ACTIONS_BASE_URL` — URL, по которому **сервер Mattermost** достучится до бота:
-   - оба на одном хосте без Docker: `http://127.0.0.1:9000`
-   - Mattermost в Docker, бот в Docker (как в compose): адрес хоста из docker-сети MM,
-     обычно `http://172.17.0.1:9000`, либо общая docker-сеть и `http://coffeebot:9000`
+   - **Mattermost в Docker (рекомендуется)** — общая docker-сеть и
+     `ACTIONS_BASE_URL=http://coffeebot:9000`. Имя сети MM:
+     `docker inspect <mm-контейнер> -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{"\n"}}{{end}}'`;
+     рядом с compose-файлом бота создайте `docker-compose.override.yml`:
+
+     ```yaml
+     services:
+       coffeebot:
+         networks: [default, mmnet]
+     networks:
+       mmnet:
+         name: docker_default   # имя сети Mattermost
+         external: true
+     ```
+   - Mattermost нативно (systemd) на том же хосте: `http://127.0.0.1:9000`
+
+   Вариант со шлюзом моста (`172.17.0.1`) не работает с этим compose: порт бота
+   опубликован только на `127.0.0.1` хоста.
 3. В **System Console → Environment → Developer** добавьте адрес бота в
-   `Allow untrusted internal connections to` (например `127.0.0.1 172.17.0.1`),
-   иначе Mattermost откажется слать POST на внутренний адрес.
-4. Эндпоинт не должен быть доступен извне: в compose порт открыт только на
-   `127.0.0.1` хоста.
+   `Allow untrusted internal connections to`: `coffeebot` (общая сеть)
+   или `127.0.0.1` (нативный MM) — иначе Mattermost откажется слать POST
+   на внутренний адрес.
+4. Эндпоинт не должен быть доступен извне: порт открыт только на `127.0.0.1`
+   хоста (для healthz/отладки), в общей docker-сети публикация вообще не нужна.
+5. Проверка из контейнера MM: `docker exec <mm-контейнер> curl -s http://coffeebot:9000/healthz`
+   → `{"status":"ok"}`.
 
 ## Запуск в Docker (рекомендуется)
 
