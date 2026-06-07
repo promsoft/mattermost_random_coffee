@@ -13,7 +13,9 @@ services:
       TZ: Europe/Moscow
       HTTP_HOST: 0.0.0.0  # внутри контейнера; наружу порт открыт только на localhost
     ports:
-      - "127.0.0.1:9000:9000"  # эндпоинт кнопок: доступен только с хоста (для Mattermost)
+      # Эндпоинт кнопок, только с хоста (healthz/отладка; MM в общей docker-сети
+      # ходит напрямую). Если 9000 на хосте занят — задайте HTTP_PUBLISH_PORT в .env
+      - "127.0.0.1:${HTTP_PUBLISH_PORT:-9000}:9000"
     volumes:
       - coffee-data:/data
     # Если Mattermost доступен только на localhost хоста (не по публичному URL),
