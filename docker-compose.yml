@@ -7,6 +7,9 @@ services:
     environment:
       DB_PATH: /data/coffee.db
       TZ: Europe/Moscow
+      HTTP_HOST: 0.0.0.0  # внутри контейнера; наружу порт открыт только на localhost
+    ports:
+      - "127.0.0.1:9000:9000"  # эндпоинт кнопок: доступен только с хоста (для Mattermost)
     volumes:
       - coffee-data:/data
     # Если Mattermost доступен только на localhost хоста (не по публичному URL),

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-Phase 0 complete: project skeleton, config, SQLite + Alembic, echo bot in DMs, Docker. Next phases (see `spec/plan.md`): MVP registration + weekly pairing → status/rating cycle → decline/postpone → admin/complaints. Documents (in Russian):
+Phase 1 (MVP) complete: registration/pause/profile via DM buttons + text commands, weekly matching with 365-day pair cooldown, pair intro in group channels, channel announcements, help. Next phases (see `spec/plan.md`): status/rating cycle → decline/postpone → admin/complaints. Documents (in Russian):
 
 - `spec/random-coffee-bot.md` — product spec + clarified decisions
 - `spec/architecture.md` — stack, components, data model, matching algorithm, meeting state machine
@@ -34,9 +34,13 @@ docker compose up -d --build         # production-style run
 
 ## Architecture Notes
 
-- `coffeebot.events.handle_event` is a pure function (raw WebSocket JSON → `Reply | None`); all network I/O stays in `main.py`. Keep domain logic free of network calls for testability.
-- DB sessions via `coffeebot.db.session.make_engine`/`make_session_factory`; models in `coffeebot.db.models` (state stored as non-native StrEnum → VARCHAR).
-- Alembic `env.py` reads the DB URL from `Settings` (`.env`/`DB_PATH`), `render_as_batch=True` for SQLite ALTERs.
+- Single asyncio loop in `main.py` runs three things: WebSocket listener (DM commands), uvicorn HTTP server (button callbacks at `/actions/{secret}`), APScheduler (Monday matching cron + startup catch-up).
+- Layering: `events.parse_dm` (pure parsing) → `handlers.BotHandlers` (scenarios) → `services/` (domain logic, pure DB) + `mm.MattermostGateway` (all network sends). Tests use `FakeGateway` from `tests/conftest.py`. Keep domain logic free of network calls.
+- All user-facing strings live in `texts.py` (Russian); buttons built in `cards.py`.
+- Idempotency invariants: matching is once-per-`week_start`; pair notifications gate on `meetings.notified_at` (committed one-by-one); restart never duplicates sends.
+- Button callback auth: Mattermost Free doesn't sign action POSTs — auth is the secret in the URL path (`ACTIONS_SECRET`, mandatory) + endpoint bound to internal network only.
+- `mm_websocket.ClientTLSWebsocket` fixes mattermostdriver's server-side SSL context bug; always pass it to `init_websocket`/use directly.
+- DB: models in `coffeebot.db.models` (StrEnum → VARCHAR, non-native); Alembic `env.py` reads the DB URL from `Settings` (`.env`/`DB_PATH`), `render_as_batch=True` for SQLite ALTERs.
 
 ## What This Project Is
 

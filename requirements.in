@@ -3,7 +3,11 @@ mattermostdriver
 pydantic-settings
 SQLAlchemy
 alembic
+fastapi
+uvicorn
+apscheduler
 
 # Dev
 pytest
 ruff
+httpx  # TestClient для FastAPI

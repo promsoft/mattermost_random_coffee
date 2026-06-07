@@ -16,9 +16,37 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     tz: str = "Europe/Moscow"
 
+    # Канал для анонсов (ID канала; пусто — анонсы выключены)
+    announce_channel_id: str = ""
+    # Админы бота, имена через запятую: "ivanov,petrov" (этап 4)
+    admin_usernames: str = ""
+
+    # HTTP-эндпоинт кнопок: на нём слушает бот...
+    http_host: str = "127.0.0.1"
+    http_port: int = 9000
+    # ...а по этому URL до него достукивается сервер Mattermost
+    actions_base_url: str = "http://127.0.0.1:9000"
+    # Обязательный секрет в URL кнопок: Mattermost Free не подписывает
+    # callback-запросы, секрет + внутренняя сеть = аутентификация запросов
+    actions_secret: str = ""
+
+    # Расписание матчинга: день недели (0 = понедельник) и время в поясе tz
+    match_weekday: int = 0
+    match_hour: int = 7
+    match_minute: int = 0
+
     @property
     def db_url(self) -> str:
         return f"sqlite:///{self.db_path}"
+
+    @property
+    def admin_username_set(self) -> set[str]:
+        return {u.strip().lstrip("@") for u in self.admin_usernames.split(",") if u.strip()}
+
+    @property
+    def actions_url(self) -> str:
+        """Полный URL эндпоинта кнопок, который зашивается в посты."""
+        return f"{self.actions_base_url.rstrip('/')}/actions/{self.actions_secret}"
 
     @property
     def driver_options(self) -> dict:

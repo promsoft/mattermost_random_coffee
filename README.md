@@ -6,7 +6,14 @@
 Документация: [спецификация](spec/random-coffee-bot.md) · [архитектура](spec/architecture.md) ·
 [план](spec/plan.md) · [бэклог](spec/backlog.md)
 
-**Статус: этап 0** — каркас, подключение к Mattermost, эхо-бот в личных сообщениях.
+**Статус: этап 1 (MVP)** — регистрация/пауза/профиль (кнопки + команды в личке),
+еженедельный матчинг пар с годовым кулдауном, знакомство пары в групповом чате,
+анонсы в канал, справка.
+
+## Как пользоваться (участнику)
+
+Напишите боту в личку `помощь` — он покажет справку и кнопки. Команды:
+`регистрация` · `пауза` · `возобновить` · `профиль` · `помощь`.
 
 ## Создание bot-аккаунта в Mattermost
 
@@ -17,10 +24,28 @@
 3. Скопировать сгенерированный **Token** → переменная `MM_BOT_TOKEN`.
 4. Добавить бота в команду (team), где будут участники.
 
+## Настройка интерактивных кнопок
+
+Кнопки в сообщениях бота работают через HTTP-callback: сервер Mattermost шлёт POST
+на `ACTIONS_BASE_URL/actions/<ACTIONS_SECRET>`.
+
+1. Сгенерируйте секрет: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+   → `ACTIONS_SECRET` (обязателен: Mattermost Free не подписывает callback-запросы,
+   секрет в URL + внутренняя сеть — единственная аутентификация).
+2. `ACTIONS_BASE_URL` — URL, по которому **сервер Mattermost** достучится до бота:
+   - оба на одном хосте без Docker: `http://127.0.0.1:9000`
+   - Mattermost в Docker, бот в Docker (как в compose): адрес хоста из docker-сети MM,
+     обычно `http://172.17.0.1:9000`, либо общая docker-сеть и `http://coffeebot:9000`
+3. В **System Console → Environment → Developer** добавьте адрес бота в
+   `Allow untrusted internal connections to` (например `127.0.0.1 172.17.0.1`),
+   иначе Mattermost откажется слать POST на внутренний адрес.
+4. Эндпоинт не должен быть доступен извне: в compose порт открыт только на
+   `127.0.0.1` хоста.
+
 ## Запуск в Docker (рекомендуется)
 
 ```bash
-cp .env.example .env   # заполнить MM_URL и MM_BOT_TOKEN
+cp .env.example .env   # заполнить MM_URL, MM_BOT_TOKEN, ACTIONS_SECRET, ACTIONS_BASE_URL
 docker compose up -d --build
 docker compose logs -f coffeebot
 ```
@@ -71,6 +96,15 @@ alembic upgrade head
 |---|---|---|
 | `MM_URL` | `http://localhost:8065` | URL сервера Mattermost |
 | `MM_BOT_TOKEN` | — | токен bot-аккаунта |
+| `ANNOUNCE_CHANNEL_ID` | пусто | ID канала анонсов (пусто — выключено) |
+| `ADMIN_USERNAMES` | пусто | админы бота, имена через запятую |
+| `ACTIONS_BASE_URL` | `http://127.0.0.1:9000` | URL бота для callback'ов кнопок |
+| `ACTIONS_SECRET` | — | **обязательный** секрет в URL кнопок |
+| `HTTP_HOST` / `HTTP_PORT` | `127.0.0.1` / `9000` | где слушает эндпоинт кнопок |
+| `MATCH_WEEKDAY` / `MATCH_HOUR` / `MATCH_MINUTE` | `0` / `7` / `0` | расписание матчинга (0 = пн) |
 | `DB_PATH` | `coffee.db` | путь к файлу SQLite |
 | `LOG_LEVEL` | `INFO` | уровень логирования |
 | `TZ` | `Europe/Moscow` | часовой пояс расписаний |
+
+При старте бот «догоняет» пропущенный матчинг недели (если время прошло, а пар нет)
+и досылает неотправленные уведомления — рестарт ничего не дублирует.

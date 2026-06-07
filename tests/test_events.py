@@ -1,6 +1,6 @@
 import json
 
-from coffeebot.events import handle_event
+from coffeebot.events import parse_dm
 
 BOT_ID = "bot-user-id"
 
@@ -11,6 +11,7 @@ def posted_event(message="привет", user_id="someone", channel_type="D", ch
             "event": "posted",
             "data": {
                 "channel_type": channel_type,
+                "sender_name": "@ivan",
                 "post": json.dumps(
                     {"user_id": user_id, "channel_id": channel_id, "message": message}
                 ),
@@ -19,30 +20,33 @@ def posted_event(message="привет", user_id="someone", channel_type="D", ch
     )
 
 
-def test_echo_on_direct_message():
-    reply = handle_event(posted_event("привет"), BOT_ID)
-    assert reply is not None
-    assert reply.channel_id == "chan1"
-    assert "привет" in reply.message
+def test_parses_direct_message():
+    dm = parse_dm(posted_event("привет"), BOT_ID)
+    assert dm is not None
+    assert dm.user_id == "someone"
+    assert dm.username == "ivan"
+    assert dm.channel_id == "chan1"
+    assert dm.text == "привет"
 
 
 def test_ignores_own_posts():
-    assert handle_event(posted_event(user_id=BOT_ID), BOT_ID) is None
+    assert parse_dm(posted_event(user_id=BOT_ID), BOT_ID) is None
 
 
-def test_ignores_public_channels():
-    assert handle_event(posted_event(channel_type="O"), BOT_ID) is None
+def test_ignores_public_and_group_channels():
+    assert parse_dm(posted_event(channel_type="O"), BOT_ID) is None
+    assert parse_dm(posted_event(channel_type="G"), BOT_ID) is None
 
 
 def test_ignores_non_posted_events():
-    assert handle_event(json.dumps({"event": "typing", "data": {}}), BOT_ID) is None
+    assert parse_dm(json.dumps({"event": "typing", "data": {}}), BOT_ID) is None
 
 
 def test_ignores_empty_message():
-    assert handle_event(posted_event("   "), BOT_ID) is None
+    assert parse_dm(posted_event("   "), BOT_ID) is None
 
 
 def test_survives_garbage():
-    assert handle_event("not a json {", BOT_ID) is None
+    assert parse_dm("not a json {", BOT_ID) is None
     no_post = json.dumps({"event": "posted", "data": {"channel_type": "D"}})
-    assert handle_event(no_post, BOT_ID) is None
+    assert parse_dm(no_post, BOT_ID) is None
