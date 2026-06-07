@@ -6,6 +6,7 @@ from mattermostdriver import Driver
 
 from coffeebot.config import Settings
 from coffeebot.events import handle_event
+from coffeebot.mm_websocket import ClientTLSWebsocket
 
 log = logging.getLogger(__name__)
 
@@ -32,8 +33,9 @@ def main() -> None:
         if reply is not None:
             driver.posts.create_post({"channel_id": reply.channel_id, "message": reply.message})
 
-    # Блокирующий вызов: слушаем WebSocket, при обрыве соединения драйвер переподключается
-    driver.init_websocket(on_event)
+    # Блокирующий вызов: слушаем WebSocket, при обрыве соединения драйвер переподключается.
+    # ClientTLSWebsocket — фикс серверного SSL-контекста в mattermostdriver (см. mm_websocket.py)
+    driver.init_websocket(on_event, websocket_cls=ClientTLSWebsocket)
 
 
 if __name__ == "__main__":
