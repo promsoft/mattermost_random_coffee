@@ -4,7 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-Greenfield project — no code, build system, or tech stack chosen yet. The only artifact is the product spec in `spec/random-coffee-bot.md` (written in Russian).
+Greenfield project — spec and architecture are finalized, no code yet. Documents (in Russian):
+
+- `spec/random-coffee-bot.md` — product spec + clarified decisions
+- `spec/architecture.md` — stack, components, data model, matching algorithm, meeting state machine
+- `spec/plan.md` — phased execution plan (each phase ends with a deployable bot)
+
+## Chosen Stack
+
+Python 3.12+ standalone bot (not a plugin): `mattermostdriver` (REST + WebSocket), FastAPI endpoint for interactive button callbacks, APScheduler (cron jobs Mon/Wed/Sun, Europe/Moscow), SQLite + SQLAlchemy + Alembic, pydantic-settings, Docker Compose deployment on the same host as Mattermost. Tests: pytest; lint: ruff. Scale target: ≤50 participants.
 
 ## What This Project Is
 
