@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-Phases 0–2 and 4 complete: full weekly cycle (registration/profile, rating-aware Monday matching with 365-day pair cooldown, Wednesday status poll, Sunday survey with 0–5 rating), admin commands (`админ участники/встречи/жалобы/отменить/пауза/снять-паузу`), complaints with auto-pause. Deployed to production (mm.ods.ai). Remaining: phase 3 (decline pair / postpone meeting), see `spec/plan.md`. Documents (in Russian):
+Phases 0–4 complete: full weekly cycle (registration/profile, rating-aware Monday matching with 365-day pair cooldown, Wednesday status poll, Sunday survey with 0–5 rating), decline-pair with immediate re-match from the free pool + mid-week join re-match, postpone-to-next-week (partner accepts/cancels), admin commands (`админ участники/встречи/жалобы/отменить/пауза/снять-паузу`), complaints with auto-pause. Deployed to production (mm.ods.ai). All spec items (1–13) done; remaining is optional phase 5 (polish), see `spec/plan.md`. Documents (in Russian):
 
 - `spec/random-coffee-bot.md` — product spec + clarified decisions
 - `spec/architecture.md` — stack, components, data model, matching algorithm, meeting state machine

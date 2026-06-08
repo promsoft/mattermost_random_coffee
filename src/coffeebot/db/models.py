@@ -72,6 +72,8 @@ class Meeting(Base):
     rating_u1: Mapped[int | None] = mapped_column(default=None)
     rating_u2: Mapped[int | None] = mapped_column(default=None)
     postponed_from_id: Mapped[int | None] = mapped_column(ForeignKey("meetings.id"), default=None)
+    # Кто предложил перенос (для postpone_pending): отвечает только второй участник
+    postpone_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), default=None)
     cancelled_by: Mapped[str | None] = mapped_column(String(16), default=None)  # user | admin
     # Отметки отправки рассылок (идемпотентность: рестарт не дублирует)
     notified_at: Mapped[datetime | None] = mapped_column(default=None)  # карточка пары

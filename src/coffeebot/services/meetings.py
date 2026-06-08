@@ -4,7 +4,7 @@ State machine описана в spec/architecture.md.
 """
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -107,6 +107,72 @@ def admin_cancel(session: Session, meeting: Meeting) -> bool:
         return False
     meeting.status = MeetingStatus.CANCELLED
     meeting.cancelled_by = "admin"
+    session.commit()
+    return True
+
+
+def decline_pair(session: Session, meeting: Meeting, user: User) -> bool:
+    """Отказ участника от пары (этап 3): встреча → declined, оба возвращаются в пул.
+
+    False — не участник или встреча уже не в статусе scheduled.
+    """
+    if user_slot(meeting, user) is None or meeting.status != MeetingStatus.SCHEDULED:
+        return False
+    meeting.status = MeetingStatus.DECLINED
+    session.commit()
+    return True
+
+
+def propose_postpone(session: Session, meeting: Meeting, user: User) -> bool:
+    """Предложение переноса на след. неделю: scheduled → postpone_pending.
+
+    Запоминаем инициатора — отвечать может только второй участник.
+    False — не участник или встреча не scheduled.
+    """
+    if user_slot(meeting, user) is None or meeting.status != MeetingStatus.SCHEDULED:
+        return False
+    meeting.status = MeetingStatus.POSTPONE_PENDING
+    meeting.postpone_by_id = user.id
+    session.commit()
+    return True
+
+
+def accept_postpone(session: Session, meeting: Meeting, user: User) -> Meeting | None:
+    """Согласие на перенос: исходная встреча → postponed, создаётся новая на след. неделю.
+
+    Отвечать может только не-инициатор. None — нельзя (не тот статус/участник/инициатор).
+    """
+    if (
+        meeting.status != MeetingStatus.POSTPONE_PENDING
+        or user_slot(meeting, user) is None
+        or user.id == meeting.postpone_by_id
+    ):
+        return None
+    meeting.status = MeetingStatus.POSTPONED
+    new_meeting = Meeting(
+        week_start=meeting.week_start + timedelta(days=7),
+        user1_id=meeting.user1_id,
+        user2_id=meeting.user2_id,
+        postponed_from_id=meeting.id,
+    )
+    session.add(new_meeting)
+    session.commit()
+    return new_meeting
+
+
+def decline_postpone(session: Session, meeting: Meeting, user: User) -> bool:
+    """Отказ от переноса: встреча считается несостоявшейся (cancelled).
+
+    Отвечать может только не-инициатор. False — нельзя.
+    """
+    if (
+        meeting.status != MeetingStatus.POSTPONE_PENDING
+        or user_slot(meeting, user) is None
+        or user.id == meeting.postpone_by_id
+    ):
+        return False
+    meeting.status = MeetingStatus.CANCELLED
+    meeting.cancelled_by = "user"
     session.commit()
     return True
 

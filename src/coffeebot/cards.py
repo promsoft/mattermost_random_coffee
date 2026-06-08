@@ -35,6 +35,44 @@ def menu_attachments(user: User | None, actions_url: str) -> list[dict]:
     return []
 
 
+def pair_card_attachments(meeting_id: int, actions_url: str) -> list[dict]:
+    """Кнопки под карточкой пары: отказаться от пары / перенести (этап 3)."""
+    return [
+        {
+            "actions": [
+                _button(
+                    texts.BTN_DECLINE_PAIR, "decline", actions_url, meeting_id=meeting_id
+                ),
+                _button(
+                    texts.BTN_POSTPONE, "postpone", actions_url, meeting_id=meeting_id
+                ),
+            ]
+        }
+    ]
+
+
+def postpone_confirm_attachments(meeting_id: int, actions_url: str) -> list[dict]:
+    """Ответ на предложение переноса: согласиться / отменить встречу (этап 3)."""
+    return [
+        {
+            "actions": [
+                _button(
+                    texts.BTN_POSTPONE_ACCEPT,
+                    "postpone_accept",
+                    actions_url,
+                    meeting_id=meeting_id,
+                ),
+                _button(
+                    texts.BTN_POSTPONE_DECLINE,
+                    "postpone_decline",
+                    actions_url,
+                    meeting_id=meeting_id,
+                ),
+            ]
+        }
+    ]
+
+
 def midweek_attachments(meeting_id: int, actions_url: str) -> list[dict]:
     """Опрос среды: договорились / созвонились / отменили / не связывались."""
     return [

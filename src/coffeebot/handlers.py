@@ -91,7 +91,16 @@ class BotHandlers:
                 if user is not None:
                     users.start_profile_edit(session, user)
                     self.gateway.dm(mm_user_id, texts.PROFILE_EDIT_PROMPT)
-            elif action in ("midweek", "survey", "rate", "complain"):
+            elif action in (
+                "midweek",
+                "survey",
+                "rate",
+                "complain",
+                "decline",
+                "postpone",
+                "postpone_accept",
+                "postpone_decline",
+            ):
                 self._on_meeting_action(session, user, mm_user_id, action, context)
             else:
                 log.warning("Неизвестное действие кнопки: %s от %s", action, mm_user_id)
@@ -128,6 +137,100 @@ class BotHandlers:
                 self.gateway.dm(mm_user_id, texts.MEETING_NOT_RATEABLE)
         elif action == "complain":
             self._confirm_complain(session, meeting, user, mm_user_id)
+        elif action == "decline":
+            self._on_decline(session, meeting, user, mm_user_id)
+        elif action == "postpone":
+            self._on_postpone(session, meeting, user, mm_user_id)
+        elif action == "postpone_accept":
+            self._on_postpone_accept(session, meeting, user, mm_user_id)
+        elif action == "postpone_decline":
+            self._on_postpone_decline(session, meeting, user, mm_user_id)
+
+    # --- отказ от пары и перенос (этап 3) -----------------------------------
+
+    def _on_decline(self, session: Session, meeting, user: User, mm_user_id: str) -> None:
+        partner = meetings_svc.partner_of(meeting, user)
+        if not meetings_svc.decline_pair(session, meeting, user):
+            self.gateway.dm(mm_user_id, texts.PAIR_ACTION_TOO_LATE)
+            return
+        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        new_meetings = matching.domatch(session, week_start)
+        self._notify_pairs(session, week_start)
+        matched = {m.user1_id for m in new_meetings} | {m.user2_id for m in new_meetings}
+        self.gateway.dm(
+            mm_user_id,
+            texts.DECLINE_DONE_REMATCHED if user.id in matched else texts.DECLINE_DONE_POOLED,
+        )
+        partner_text = (
+            texts.PARTNER_DECLINED_REMATCHED
+            if partner.id in matched
+            else texts.PARTNER_DECLINED_POOLED
+        )
+        try:
+            self.gateway.dm(partner.mm_user_id, partner_text.format(partner=user.username))
+        except Exception:
+            log.exception("Не удалось уведомить @%s об отказе от пары", partner.username)
+
+    def _on_postpone(self, session: Session, meeting, user: User, mm_user_id: str) -> None:
+        partner = meetings_svc.partner_of(meeting, user)
+        if not meetings_svc.propose_postpone(session, meeting, user):
+            self.gateway.dm(mm_user_id, texts.PAIR_ACTION_TOO_LATE)
+            return
+        self.gateway.dm(mm_user_id, texts.POSTPONE_PROPOSED.format(partner=partner.username))
+        try:
+            self.gateway.dm(
+                partner.mm_user_id,
+                texts.POSTPONE_REQUEST.format(partner=user.username),
+                cards.postpone_confirm_attachments(meeting.id, self.settings.actions_url),
+            )
+        except Exception:
+            log.exception("Не удалось отправить запрос переноса @%s", partner.username)
+
+    def _on_postpone_accept(
+        self, session: Session, meeting, user: User, mm_user_id: str
+    ) -> None:
+        proposer = meetings_svc.partner_of(meeting, user)  # инициатор переноса
+        if meetings_svc.accept_postpone(session, meeting, user) is None:
+            self.gateway.dm(mm_user_id, texts.PAIR_ACTION_TOO_LATE)
+            return
+        self.gateway.dm(
+            mm_user_id, texts.POSTPONE_ACCEPTED_DONE.format(partner=proposer.username)
+        )
+        try:
+            self.gateway.dm(
+                proposer.mm_user_id,
+                texts.POSTPONE_ACCEPTED_NOTIFY.format(partner=user.username),
+            )
+        except Exception:
+            log.exception("Не удалось уведомить @%s о согласии на перенос", proposer.username)
+
+    def _on_postpone_decline(
+        self, session: Session, meeting, user: User, mm_user_id: str
+    ) -> None:
+        proposer = meetings_svc.partner_of(meeting, user)
+        if not meetings_svc.decline_postpone(session, meeting, user):
+            self.gateway.dm(mm_user_id, texts.PAIR_ACTION_TOO_LATE)
+            return
+        self.gateway.dm(
+            mm_user_id, texts.POSTPONE_DECLINED_DONE.format(partner=proposer.username)
+        )
+        try:
+            self.gateway.dm(
+                proposer.mm_user_id,
+                texts.POSTPONE_DECLINED_NOTIFY.format(partner=user.username),
+            )
+        except Exception:
+            log.exception("Не удалось уведомить @%s об отказе от переноса", proposer.username)
+
+    def _maybe_domatch_after_join(self, session: Session, user: User) -> None:
+        """Домэтч присоединившегося среди недели участника (этап 3)."""
+        if user.state != UserState.ACTIVE:
+            return
+        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        if not matching.matching_done(session, week_start):
+            return  # матчинга на этой неделе ещё не было — ждём понедельника
+        if matching.domatch(session, week_start):
+            self._notify_pairs(session, week_start)
 
     # --- жалобы --------------------------------------------------------------
 
@@ -187,6 +290,7 @@ class BotHandlers:
             self.gateway.dm(mm_user_id, texts.REGISTERED_NEW)
         elif user.state == UserState.ACTIVE:
             self.gateway.dm(mm_user_id, texts.REGISTERED_AGAIN)
+        self._maybe_domatch_after_join(session, user)
 
     def _do_pause(self, session: Session, user: User | None, mm_user_id: str) -> None:
         if user is None:
@@ -203,6 +307,7 @@ class BotHandlers:
             return
         if users.resume(session, user):
             self.gateway.dm(mm_user_id, texts.RESUMED)
+            self._maybe_domatch_after_join(session, user)
         else:
             self.gateway.dm(mm_user_id, texts.PAUSED_BY_ADMIN)
 
@@ -449,6 +554,7 @@ class BotHandlers:
                         profile2=users.sanitize_profile(u2.profile or "")
                         or texts.PROFILE_NOT_FILLED,
                     ),
+                    cards.pair_card_attachments(meeting.id, self.settings.actions_url),
                 )
             except Exception:
                 log.exception("Не удалось уведомить пару %s", meeting)
