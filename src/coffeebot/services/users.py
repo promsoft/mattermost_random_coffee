@@ -36,7 +36,10 @@ def register(session: Session, mm_user_id: str, username: str) -> tuple[User, bo
         session.commit()
         return user, True
     user.username = username  # username мог поменяться
-    user.state = UserState.ACTIVE
+    # Регистрация НЕ снимает административную паузу и паузу по жалобе — иначе
+    # участник обходил бы блокировку (спека п. 12: снять может только админ).
+    if user.state not in (UserState.PAUSED_BY_ADMIN, UserState.PAUSED_BY_COMPLAINT):
+        user.state = UserState.ACTIVE
     session.commit()
     return user, False
 

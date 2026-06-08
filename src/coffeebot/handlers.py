@@ -288,9 +288,11 @@ class BotHandlers:
         user, created = users.register(session, mm_user_id, username)
         if created:
             self.gateway.dm(mm_user_id, texts.REGISTERED_NEW)
+        elif user.state in (UserState.PAUSED_BY_ADMIN, UserState.PAUSED_BY_COMPLAINT):
+            self.gateway.dm(mm_user_id, texts.PAUSED_BY_ADMIN)
         elif user.state == UserState.ACTIVE:
             self.gateway.dm(mm_user_id, texts.REGISTERED_AGAIN)
-        self._maybe_domatch_after_join(session, user)
+        self._maybe_domatch_after_join(session, user)  # пропустит, если не active
 
     def _do_pause(self, session: Session, user: User | None, mm_user_id: str) -> None:
         if user is None:

@@ -70,6 +70,19 @@ def test_admin_pause_cannot_be_lifted_by_user(handlers, gateway, session_factory
     assert "администратор" in gateway.dms[-1][1].lower()
 
 
+def test_registration_does_not_lift_admin_or_complaint_pause(handlers, gateway, session_factory):
+    """Обход блокировки: пауза по жалобе/админом не снимается командой `регистрация`."""
+    handlers.on_dm(dm("регистрация"))
+    for paused in (UserState.PAUSED_BY_COMPLAINT, UserState.PAUSED_BY_ADMIN):
+        with session_factory() as s:
+            user = users_svc.get_by_mm_id(s, "mm1")
+            user.state = paused
+            s.commit()
+        handlers.on_dm(dm("регистрация"))
+        assert get_user(session_factory).state == paused  # остался на паузе
+        assert "администратор" in gateway.dms[-1][1].lower()
+
+
 def test_profile_inline_set(handlers, gateway, session_factory):
     handlers.on_dm(dm("регистрация"))
     handlers.on_dm(dm("профиль tg: @ivan"))
