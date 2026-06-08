@@ -1,6 +1,6 @@
 """Этап 3: отказ от пары с домэтчем из пула и перенос встречи."""
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -11,6 +11,7 @@ from coffeebot.db.models import Meeting, MeetingStatus, User, UserState
 from coffeebot.events import IncomingDM
 from coffeebot.handlers import BotHandlers
 from coffeebot.services import matching
+from coffeebot.services import meetings as meetings_svc
 
 
 @pytest.fixture
@@ -120,6 +121,37 @@ def test_decline_rejected_when_not_scheduled(handlers, gateway, session_factory)
     )
     assert get_meeting(session_factory, m.id).status == MeetingStatus.CANCELLED
     assert "нельзя выполнить" in gateway.dms[-1][1]
+
+
+def test_decline_limited_to_one_per_week(handlers, gateway, session_factory):
+    """Один отказ в неделю: вторая попытка отклоняется, встреча остаётся."""
+    week = date(2026, 6, 8)  # понедельник
+    with session_factory() as s:
+        a = User(mm_user_id="mmA", username="a", state=UserState.ACTIVE)
+        b = User(mm_user_id="mmB", username="b", state=UserState.ACTIVE)
+        c = User(mm_user_id="mmC", username="c", state=UserState.ACTIVE)
+        s.add_all([a, b, c])
+        s.commit()
+        m1 = Meeting(week_start=week, user1_id=a.id, user2_id=b.id)
+        m2 = Meeting(week_start=week, user1_id=a.id, user2_id=c.id)
+        s.add_all([m1, m2])
+        s.commit()
+        a_mm, a_un, b_id = a.mm_user_id, a.username, b.id
+        m1_id, m2_id = m1.id, m2.id
+
+    # 1-й отказ — успешен
+    handlers.on_action(a_mm, a_un, {"action": "decline", "meeting_id": m1_id})
+    assert get_meeting(session_factory, m1_id).status == MeetingStatus.DECLINED
+
+    # тот, на кого отказались (b), лимит не тратит
+    with session_factory() as s:
+        b_user = s.get(User, b_id)
+        assert meetings_svc.user_declined_this_week(s, b_user, week) is False
+
+    # 2-й отказ той же недели — отклонён, встреча остаётся scheduled
+    handlers.on_action(a_mm, a_un, {"action": "decline", "meeting_id": m2_id})
+    assert get_meeting(session_factory, m2_id).status == MeetingStatus.SCHEDULED
+    assert "раз в неделю" in gateway.dms[-1][1]
 
 
 # --- домэтч при регистрации среди недели ---------------------------------

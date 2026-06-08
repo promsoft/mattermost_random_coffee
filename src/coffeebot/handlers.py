@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from coffeebot import cards, texts
 from coffeebot.config import Settings
-from coffeebot.db.models import User, UserState
+from coffeebot.db.models import MeetingStatus, User, UserState
 from coffeebot.events import IncomingDM
 from coffeebot.mm import MattermostGateway
 from coffeebot.services import complaints as complaints_svc
@@ -150,6 +150,13 @@ class BotHandlers:
 
     def _on_decline(self, session: Session, meeting, user: User, mm_user_id: str) -> None:
         partner = meetings_svc.partner_of(meeting, user)
+        if meeting.status != MeetingStatus.SCHEDULED:
+            self.gateway.dm(mm_user_id, texts.PAIR_ACTION_TOO_LATE)
+            return
+        # лимит: один отказ в неделю — иначе можно перебирать партнёров (см. security.md)
+        if meetings_svc.user_declined_this_week(session, user, meeting.week_start):
+            self.gateway.dm(mm_user_id, texts.DECLINE_LIMIT_REACHED)
+            return
         if not meetings_svc.decline_pair(session, meeting, user):
             self.gateway.dm(mm_user_id, texts.PAIR_ACTION_TOO_LATE)
             return

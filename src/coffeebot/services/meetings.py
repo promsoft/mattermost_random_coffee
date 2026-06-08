@@ -111,14 +111,31 @@ def admin_cancel(session: Session, meeting: Meeting) -> bool:
     return True
 
 
+def user_declined_this_week(session: Session, user: User, week_start: date) -> bool:
+    """Отказывался ли участник от пары на этой неделе (лимит — один отказ в неделю)."""
+    return bool(
+        session.scalar(
+            select(func.count())
+            .select_from(Meeting)
+            .where(
+                Meeting.week_start == week_start,
+                Meeting.status == MeetingStatus.DECLINED,
+                Meeting.declined_by_id == user.id,
+            )
+        )
+    )
+
+
 def decline_pair(session: Session, meeting: Meeting, user: User) -> bool:
     """Отказ участника от пары (этап 3): встреча → declined, оба возвращаются в пул.
 
+    Запоминаем отказавшегося (`declined_by_id`) для лимита «один отказ в неделю».
     False — не участник или встреча уже не в статусе scheduled.
     """
     if user_slot(meeting, user) is None or meeting.status != MeetingStatus.SCHEDULED:
         return False
     meeting.status = MeetingStatus.DECLINED
+    meeting.declined_by_id = user.id
     session.commit()
     return True
 
