@@ -85,43 +85,51 @@ def matching_done(session: Session, week_start: date) -> bool:
     )
 
 
-def committed_user_ids(session: Session, week_start: date) -> set[int]:
-    """ID участников, у которых уже есть живая встреча на эту неделю.
+def busy_user_ids(
+    session: Session, week_start: date, *, include_completed_this_week: bool = False
+) -> set[int]:
+    """ID участников с живой встречей на эту или будущую неделю.
 
-    Это в т.ч. встречи, перенесённые с прошлой недели (postponed_from_id задан):
-    таких в новый матчинг не берём.
+    `scheduled`/`postpone_pending` (в т.ч. перенос вперёд) — всегда заняты;
+    `completed` на этой неделе — занят только при `include_completed_this_week`
+    (для домэтча: уже встретились, новую пару среди недели не даём).
     """
-    rows = session.execute(
-        select(Meeting.user1_id, Meeting.user2_id).where(
-            Meeting.week_start == week_start,
-            Meeting.status.in_(
-                (MeetingStatus.SCHEDULED, MeetingStatus.POSTPONE_PENDING)
-            ),
-        )
-    ).all()
-    return {uid for pair in rows for uid in pair}
-
-
-def pool_users(session: Session, week_start: date) -> list[User]:
-    """Свободные на этой неделе активные участники (этап 3: домэтч).
-
-    Занятыми считаем тех, у кого есть встреча со статусом scheduled/postpone_pending
-    на эту или будущую неделю (перенос вперёд), либо состоявшаяся на этой неделе.
-    """
-    busy: set[int] = set()
     rows = session.execute(
         select(
             Meeting.user1_id, Meeting.user2_id, Meeting.week_start, Meeting.status
         ).where(Meeting.week_start >= week_start)
     ).all()
+    busy: set[int] = set()
     for u1, u2, ws, status in rows:
         if status in (MeetingStatus.SCHEDULED, MeetingStatus.POSTPONE_PENDING) or (
-            ws == week_start and status == MeetingStatus.COMPLETED
+            include_completed_this_week
+            and ws == week_start
+            and status == MeetingStatus.COMPLETED
         ):
             busy.add(u1)
             busy.add(u2)
+    return busy
+
+
+def pool_users(session: Session, week_start: date) -> list[User]:
+    """Свободные на этой неделе активные участники (этап 3: домэтч)."""
+    busy = busy_user_ids(session, week_start, include_completed_this_week=True)
     active = session.scalars(select(User).where(User.state == UserState.ACTIVE)).all()
     return [u for u in active if u.id not in busy]
+
+
+def _create_pairs(
+    session: Session, week_start: date, pairs: list[tuple[User, User]]
+) -> list[Meeting]:
+    """Создать scheduled-встречи для пар и сбросить им streak (без commit)."""
+    meetings: list[Meeting] = []
+    for u1, u2 in pairs:
+        meeting = Meeting(week_start=week_start, user1_id=u1.id, user2_id=u2.id)
+        session.add(meeting)
+        meetings.append(meeting)
+        u1.unmatched_streak = 0
+        u2.unmatched_streak = 0
+    return meetings
 
 
 def domatch(
@@ -138,13 +146,7 @@ def domatch(
     blocked = recent_pairs(session, week_start - timedelta(days=PAIR_COOLDOWN_DAYS))
     user_ratings = meetings_svc.ratings(session)
     pairs, _ = build_pairs(pool, blocked, rng or random.Random(), user_ratings)
-    new_meetings: list[Meeting] = []
-    for u1, u2 in pairs:
-        meeting = Meeting(week_start=week_start, user1_id=u1.id, user2_id=u2.id)
-        session.add(meeting)
-        new_meetings.append(meeting)
-        u1.unmatched_streak = 0
-        u2.unmatched_streak = 0
+    new_meetings = _create_pairs(session, week_start, pairs)
     if new_meetings:
         session.commit()
         log.info("Домэтч на %s: %d новых пар", week_start, len(new_meetings))
@@ -164,7 +166,7 @@ def run_weekly_matching(
         log.info("Матчинг на %s уже выполнен, пропускаем", week_start)
         return None
 
-    committed = committed_user_ids(session, week_start)  # перенос с прошлой недели
+    committed = busy_user_ids(session, week_start)  # перенос с прошлой недели
     users = [
         u
         for u in session.scalars(select(User).where(User.state == UserState.ACTIVE)).all()
@@ -175,12 +177,7 @@ def run_weekly_matching(
     pairs, unmatched = build_pairs(users, blocked, rng or random.Random(), user_ratings)
 
     result = MatchResult(week_start=week_start, unmatched=unmatched)
-    for u1, u2 in pairs:
-        meeting = Meeting(week_start=week_start, user1_id=u1.id, user2_id=u2.id)
-        session.add(meeting)
-        result.meetings.append(meeting)
-        u1.unmatched_streak = 0
-        u2.unmatched_streak = 0
+    result.meetings = _create_pairs(session, week_start, pairs)
     for user in unmatched:
         user.unmatched_streak += 1
 

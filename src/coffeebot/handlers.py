@@ -4,7 +4,7 @@
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -40,6 +40,10 @@ class BotHandlers:
         self.gateway = gateway
         self.settings = settings
         self.tz = ZoneInfo(settings.tz)
+
+    def _current_week_start(self) -> date:
+        """Понедельник текущей недели в часовом поясе бота."""
+        return matching.current_week_start(datetime.now(self.tz).date())
 
     # --- личные сообщения -------------------------------------------------
 
@@ -160,7 +164,7 @@ class BotHandlers:
         if not meetings_svc.decline_pair(session, meeting, user):
             self.gateway.dm(mm_user_id, texts.PAIR_ACTION_TOO_LATE)
             return
-        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        week_start = self._current_week_start()
         new_meetings = matching.domatch(session, week_start)
         self._notify_pairs(session, week_start)
         matched = {m.user1_id for m in new_meetings} | {m.user2_id for m in new_meetings}
@@ -233,7 +237,7 @@ class BotHandlers:
         """Домэтч присоединившегося среди недели участника (этап 3)."""
         if user.state != UserState.ACTIVE:
             return
-        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        week_start = self._current_week_start()
         if not matching.matching_done(session, week_start):
             return  # матчинга на этой неделе ещё не было — ждём понедельника
         if matching.domatch(session, week_start):
@@ -245,7 +249,7 @@ class BotHandlers:
         if user is None:
             self._send_menu(dm.user_id, None, texts.NOT_REGISTERED_HINT)
             return
-        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        week_start = self._current_week_start()
         meeting = meetings_svc.user_meeting_of_week(session, user, week_start)
         if meeting is None:
             self.gateway.dm(dm.user_id, texts.COMPLAIN_NO_MEETING)
@@ -385,7 +389,7 @@ class BotHandlers:
         return "\n".join(lines)
 
     def _report_meetings(self, session: Session) -> str:
-        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        week_start = self._current_week_start()
         meetings = meetings_svc.week_meetings(session, week_start)
         if not meetings:
             return texts.ADMIN_NO_MEETINGS
@@ -490,8 +494,7 @@ class BotHandlers:
 
     def run_matching_job(self) -> None:
         """Понедельничный матчинг + уведомления + анонс. Идемпотентно."""
-        today = datetime.now(self.tz).date()
-        week_start = matching.current_week_start(today)
+        week_start = self._current_week_start()
         with self.session_factory() as session:
             meetings_svc.close_stale(session, week_start)  # прошлая неделя без итога
             result = matching.run_weekly_matching(session, week_start)
@@ -501,7 +504,7 @@ class BotHandlers:
 
     def run_midweek_job(self) -> None:
         """Среда: напоминание + опрос статуса каждому участнику пары. Идемпотентно."""
-        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        week_start = self._current_week_start()
         with self.session_factory() as session:
             for meeting in meetings_svc.for_midweek_poll(session, week_start):
                 attachments = cards.midweek_attachments(meeting.id, self.settings.actions_url)
@@ -521,7 +524,7 @@ class BotHandlers:
 
     def run_survey_job(self) -> None:
         """Воскресенье: итоговый опрос (состоялась? + оценка). Идемпотентно."""
-        week_start = matching.current_week_start(datetime.now(self.tz).date())
+        week_start = self._current_week_start()
         with self.session_factory() as session:
             for meeting in meetings_svc.for_survey(session, week_start):
                 attachments = cards.survey_attachments(meeting.id, self.settings.actions_url)
@@ -541,8 +544,7 @@ class BotHandlers:
 
     def notify_pending(self) -> None:
         """Дослать уведомления, не отправленные из-за рестарта (без анонса)."""
-        today = datetime.now(self.tz).date()
-        week_start = matching.current_week_start(today)
+        week_start = self._current_week_start()
         with self.session_factory() as session:
             self._notify_pairs(session, week_start)
 
