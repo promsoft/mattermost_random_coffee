@@ -103,7 +103,7 @@ docker compose logs -f coffeebot
 
 Локальная сборка вместо Docker Hub: `docker compose up -d --build`.
 
-Обновление на сервере: `docker compose pull && docker compose up -d` (миграции
+Обновление на сервере: `docker compose pull && docker compose down && docker compose up -d` (миграции
 применяются при старте контейнера автоматически).
 
 База SQLite живёт в named volume `coffee-data` (`/data/coffee.db`).
