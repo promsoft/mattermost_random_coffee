@@ -3,13 +3,18 @@
 Кнопка шлёт POST на actions_url с context.action — см. http_app.py.
 """
 
+import re
+
 from coffeebot import texts
 from coffeebot.db.models import User, UserState
 
 
 def _button(label: str, action: str, actions_url: str, **context) -> dict:
+    # Маршрут нажатия в Mattermost — /posts/{id}/actions/{action_id:[A-Za-z0-9]+}:
+    # id с любым другим символом (например «_») даёт 404 ещё в роутере
+    raw_id = f"{action}{context['value']}" if "value" in context else action
     return {
-        "id": f"{action}_{context['value']}" if "value" in context else action,
+        "id": re.sub(r"[^A-Za-z0-9]", "", raw_id),
         "name": label,
         "integration": {"url": actions_url, "context": {"action": action, **context}},
     }
