@@ -21,12 +21,15 @@ def create_app(handlers: BotHandlers, actions_secret: str) -> FastAPI:
     @app.post("/actions/{secret}")
     async def actions(secret: str, request: Request) -> dict:
         if not hmac.compare_digest(secret, actions_secret):
+            log.warning("Кнопка: неверный секрет в URL (длина %d)", len(secret))
             raise HTTPException(status_code=403)
         payload = await request.json()
         user_id = payload.get("user_id")
         username = payload.get("user_name") or ""
         context = payload.get("context") or {}
+        log.info("Кнопка: action=%s user=%s", context.get("action"), user_id)
         if not user_id or not context.get("action"):
+            log.warning("Кнопка: неполный запрос: %s", payload)
             raise HTTPException(status_code=400)
         try:
             handlers.on_action(user_id, username, context)
