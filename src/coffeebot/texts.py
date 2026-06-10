@@ -48,6 +48,9 @@ PROFILE_TOO_LONG = (
 
 UNKNOWN_COMMAND = "Не понял команду 🤔 Вот что я умею:"
 
+VERSION = "сборка {built}"
+VERSION_DEV = "локальный запуск (не из Docker-сборки)"
+
 PAIR_CARD = """\
 ☕ **Random Coffee: вы — пара на этой неделе!**
 

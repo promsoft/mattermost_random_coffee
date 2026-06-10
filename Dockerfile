@@ -14,7 +14,9 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY pyproject.toml alembic.ini ./
 COPY alembic ./alembic
 COPY src ./src
-RUN pip install --no-cache-dir --no-deps -e .
+# Время сборки (UTC) — отдаётся командой «версия»; слой пересобирается вместе с src
+RUN date -u +%Y-%m-%dT%H:%M:%SZ > src/coffeebot/build_time \
+    && pip install --no-cache-dir --no-deps -e .
 
 ENV DB_PATH=/data/coffee.db
 VOLUME /data

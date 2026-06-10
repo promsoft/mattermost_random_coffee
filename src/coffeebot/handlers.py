@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from coffeebot import cards, texts
+from coffeebot import cards, texts, version
 from coffeebot.config import Settings
 from coffeebot.db.models import MeetingStatus, User, UserState
 from coffeebot.events import IncomingDM
@@ -27,6 +27,7 @@ PROFILE_WORDS = {"профиль", "profile"}
 HELP_WORDS = {"помощь", "help", "справка", "меню"}
 COMPLAIN_WORDS = {"пожаловаться", "жалоба", "complain"}
 ADMIN_WORDS = {"админ", "admin"}
+VERSION_WORDS = {"версия", "version"}
 
 
 class BotHandlers:
@@ -54,6 +55,8 @@ class BotHandlers:
 
             if word in ADMIN_WORDS:
                 self._on_admin(session, dm)
+            elif word in VERSION_WORDS:
+                self._do_version(dm.user_id)
             elif word in HELP_WORDS:
                 self._send_menu(dm.user_id, user, texts.HELP)
             elif word in COMPLAIN_WORDS:
@@ -78,6 +81,14 @@ class BotHandlers:
                     )
             else:
                 self._send_menu(dm.user_id, user, texts.UNKNOWN_COMMAND + "\n\n" + texts.HELP)
+
+    def _do_version(self, mm_user_id: str) -> None:
+        built = version.build_time()
+        if built is None:
+            self.gateway.dm(mm_user_id, texts.VERSION_DEV)
+        else:
+            stamp = built.astimezone(self.tz).strftime("%Y-%m-%d %H:%M")
+            self.gateway.dm(mm_user_id, texts.VERSION.format(built=stamp))
 
     # --- нажатия кнопок ----------------------------------------------------
 

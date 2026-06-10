@@ -128,3 +128,21 @@ def test_matching_job_notifies_pairs_and_announces(handlers, gateway, session_fa
     handlers.run_matching_job()
     assert gateway.posts == []
     assert gateway.group_channels == []
+
+
+def test_version_dev_without_build_file(handlers, gateway):
+    handlers.on_dm(dm("версия"))
+    [(uid, message, _)] = gateway.dms
+    assert uid == "mm1"
+    assert "локальный запуск" in message
+
+
+def test_version_shows_build_time_in_bot_tz(handlers, gateway, tmp_path, monkeypatch):
+    from coffeebot import version
+
+    f = tmp_path / "build_time"
+    f.write_text("2026-06-10T09:23:00Z\n")
+    monkeypatch.setattr(version, "_BUILD_TIME_FILE", f)
+    handlers.on_dm(dm("version"))
+    [(_, message, _)] = gateway.dms
+    assert message == "сборка 2026-06-10 12:23"  # 09:23 UTC = 12:23 МСК
