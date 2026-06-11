@@ -9,6 +9,8 @@ on:
     # Еженедельная пересборка: подтягивает патчи базового образа (CVE-фиксы),
     # даже когда в коде нет изменений. Пн 04:30 UTC — до утреннего матчинга
     - cron: "30 4 * * 1"
+  # Ручной запуск — внеплановая пересборка, когда вышел срочный CVE-фикс
+  workflow_dispatch:
 
 jobs:
   test:
@@ -60,3 +62,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Расписание/ручной запуск — сборка без кеша слоёв: иначе слой
+          # apk upgrade берётся из кеша со старыми пакетами и CVE-фиксы
+          # не подтягиваются, пока базовый образ не сменит digest
+          no-cache: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
